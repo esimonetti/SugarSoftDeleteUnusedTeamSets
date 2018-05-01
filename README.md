@@ -3,8 +3,12 @@
 CLI to soft delete unused team sets
 
 1. Use at your own risk
-2. Database backup before using this tool, is highly recommended
-3. Proper testing on separate environments is highly recommended, also to verify resources utilisation
+2. It is highly recommended to complete database backup before using this tool
+3. It is highly recommended to complete thorough testing, on separate environments. It should be aimed at:
+    * Verifying that the tool works correctly
+    * Verifying that the system works correctly after the tool has been used
+    * Verifying the infrastructure resources utilisation while the tool is running
+    * Verifying the timing required to run the tool
 
 ## Usage
 Run via command line only, with: ./bin/sugarcrm teamsets-cleanup:unused
