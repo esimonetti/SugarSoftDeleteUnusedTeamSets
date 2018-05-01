@@ -43,10 +43,13 @@ class TeamSetsCleanupUnusedCommand extends Command implements InstanceModeInterf
         $deleted = $this->teamsets()->softDeleteUnusedTeamSets();
         $output->writeln('Soft deleted ' . $deleted . ' unused team sets in ' . round(microtime(true) - $start_time, 2) . ' seconds.');
         if ($deleted > 0) {
+            $output->writeln('');
             $output->writeln('Deleted the following team sets:');
             $output->writeln($this->teamsets()->getDeletedTeamSets());
+            $output->writeln('');
             $output->writeln('To revert, execute the following SQL queries:');
             $output->writeln($this->teamsets()->getUndeleteTeamSetsQueries());
+            $output->writeln('');
         }
     }
 }
