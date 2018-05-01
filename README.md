@@ -3,7 +3,7 @@
 CLI to soft delete unused team sets
 
 1. Use at your own risk
-2. It is highly recommended to complete database backup before using this tool
+2. It is highly recommended to complete a database backup before using this tool
 3. It is highly recommended to complete thorough testing, on separate environments. It should be aimed at:
     * Verifying that the tool works correctly
     * Verifying that the system works correctly after the tool has been used
@@ -35,11 +35,11 @@ UPDATE team_sets_teams SET deleted = 0 WHERE team_set_id = '30f22aa0-49f7-11e8-b
     * It soft deletes the unused team_sets from team_sets and team_sets_teams
     * It does not consider soft deleted records as valid records (e.g.: if a Contact has the deleted flag set to 1, and it is the only record across the whole database that leverages a specific team_set, the team_set will be soft deleted)
     * It provides the list of soft deleted team_sets as output
-    * It provides as output, MySQL compatible queries to revert the soft delete of those records if necessary
+    * It provides as output, MySQL compatible queries to revert the soft delete of those records if necessary. Note that if the scheduler "Prune Database on 1st of Month" runs, it will hard delete soft deleted records (including the soft deleted team sets), therefore there won't be any way to restore deleted team sets after that moment
     * It will take a long time to run through a big data set. Please test the timing and resource utilisation
 * It does not look into User's Preferences (e.g.: if a User leverages a team_set on any of his/her settings)
 * It does not look into Advanced Workflows rules
-* It does not hard delete the records from the database. That can be a manual operation after full testing is executed
+* It does not hard delete the records from the database. The scheduler "Prune Database on 1st of Month" will. Alternatively this action can be completed manually
 * As it requires CLI access, it only runs on On-Site systems
 
 ## Generate installable package
