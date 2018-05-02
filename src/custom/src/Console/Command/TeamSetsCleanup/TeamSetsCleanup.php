@@ -14,8 +14,8 @@ namespace Sugarcrm\Sugarcrm\custom\Console\Command\TeamSetsCleanup;
 class TeamSetsCleanup
 {
     protected $db;
-    protected $tables;
-    protected $deleted_teamsets;
+    protected $tables = array();
+    protected $deleted_teamsets = array();
     protected $undelete_queries = array();
 
     protected $valid_fields = array(
@@ -30,16 +30,6 @@ class TeamSetsCleanup
         'team_sets_users_2',
     );
 
-    private $soft_delete_queries = array(
-        'UPDATE team_sets SET deleted = 1 WHERE deleted = 0 AND id = ?',
-        'UPDATE team_sets_teams SET deleted = 1 WHERE deleted = 0 AND team_set_id = ?',
-    );
-
-    private $revert_soft_delete_queries = array(
-        'UPDATE team_sets SET deleted = 0 WHERE id = \'?\' AND deleted = 1;',
-        'UPDATE team_sets_teams SET deleted = 0 WHERE team_set_id = \'?\' and deleted = 1;',
-    );
-
     public $max_sleep_time = 20;
 
     public function __construct()
@@ -51,8 +41,10 @@ class TeamSetsCleanup
     public function microSleep()
     {
         // sleep a little, to reduce db load
-        $time = rand(0, $this->max_sleep_time);
-        usleep($time);
+        if ($this->max_sleep_time > 0) {
+            $time = rand(0, $this->max_sleep_time);
+            usleep($time);
+        }
     }
 
     public function verifyTeamSetExistancePerFieldOnTable($table, $team_set_id, $field)
@@ -100,14 +92,31 @@ class TeamSetsCleanup
 
     public function getAllTeamSets()
     {
-        $builder = $this->db->getConnection()->createQueryBuilder();
-        $builder->select('team_set_id')
+        // get all team sets from team_sets_teams
+        $builder1 = $this->db->getConnection()->createQueryBuilder();
+        $builder1->select('team_set_id')
             ->from('team_sets_teams')
-            ->where('deleted = ' . $builder->createPositionalParameter(0))
+            ->where('deleted = 0')
             ->groupBy('team_set_id');
           
-        $res = $builder->execute();
-        $output = $this->convertSingleResultSet($res->fetchAll(), 'team_set_id');
+        $res = $builder1->execute();
+        $output1 = $this->convertSingleResultSet($res->fetchAll(), 'team_set_id');
+
+        // get all team sets that are in team_sets but not in team_sets_teams
+        $builder2 = $this->db->getConnection()->createQueryBuilder();
+        $builder2->select('id')
+            ->from('team_sets')
+            ->where('deleted = 0')
+            ->andWhere(
+                $builder2->expr()->notIn('id', $builder1->getSQL())
+            );
+
+        $res = $builder2->execute();
+        $output2 = $this->convertSingleResultSet($res->fetchAll(), 'id');
+
+        // merge the results
+        $output = array_unique(array_merge($output1, $output2));
+
         return $output;
     }
 
@@ -201,11 +210,19 @@ class TeamSetsCleanup
 
             $this->microSleep();
 
-            $conn = $this->db->getConnection();
+            $builder = $this->db->getConnection()->createQueryBuilder();
+            $builder->update('team_sets')
+            ->set('deleted', 1)
+            ->where('deleted = 0')
+            ->andWhere('id = ' . $builder->createPositionalParameter($team_set_id));
+            $res = $builder->execute();
 
-            foreach ($this->soft_delete_queries as $query) {
-                $stmt = $conn->executeUpdate($query, array($team_set_id));
-            }
+            $builder = $this->db->getConnection()->createQueryBuilder();
+            $builder->update('team_sets_teams')
+            ->set('deleted', 1)
+            ->where('deleted = 0')
+            ->andWhere('team_set_id = ' . $builder->createPositionalParameter($team_set_id));
+            $res = $builder->execute();
 
             // produce revert query
             $this->addUndeleteQueryForTeamSet($team_set_id);
@@ -215,10 +232,33 @@ class TeamSetsCleanup
     public function addUndeleteQueryForTeamSet($team_set_id)
     {
         if (!empty($team_set_id)) {
-            foreach ($this->revert_soft_delete_queries as $query) {
-                $this->undelete_queries[] = str_replace('?', $team_set_id, $query);
-            }
+
+            $builder = $this->db->getConnection()->createQueryBuilder();
+            $builder->update('team_sets')
+            ->set('deleted', 0)
+            ->where('deleted = 1')
+            ->andWhere('id = ' . $builder->createPositionalParameter($team_set_id));
+
+            $this->undelete_queries[] = $this->composeSQLQueryFromPreparedComponents($builder->getSQL(), $builder->getParameters());
+
+            $builder = $this->db->getConnection()->createQueryBuilder();
+            $builder->update('team_sets_teams')
+            ->set('deleted', 0)
+            ->where('deleted = 1')
+            ->andWhere('team_set_id = ' . $builder->createPositionalParameter($team_set_id));
+
+            $this->undelete_queries[] = $this->composeSQLQueryFromPreparedComponents($builder->getSQL(), $builder->getParameters());
         }
+    }
+
+    protected function composeSQLQueryFromPreparedComponents($query, $params)
+    {
+        // only supports first param at this stage
+        if (!empty($params) && count($params) == 1) {
+            return str_replace('?', '\'' . array_pop($params) . '\'', $query) . ';';
+        }
+
+        return '';
     }
 
     public function getUndeleteTeamSetsQueries()
